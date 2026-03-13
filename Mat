@@ -1,0 +1,94 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <cuda.h>
+
+#define BLOCK_SIZE 32
+#define SECRET_COMMAND "SCALE_NOW"
+
+__global__ void matrix_scale_shared(int *input, int *output, int N, int scalar) {
+    __shared__ int tile[BLOCK_SIZE][BLOCK_SIZE];
+
+    int x = threadIdx.x + blockIdx.x * blockDim.x;
+    int y = threadIdx.y + blockIdx.y * blockDim.y;
+
+    // Load into shared memory
+    if (x < N && y < N) {
+        tile[threadIdx.y][threadIdx.x] = input[y * N + x];
+    }
+    __syncthreads();
+
+    // Scale and write to global memory
+    if (x < N && y < N) {
+        output[y * N + x] = tile[threadIdx.y][threadIdx.x] * scalar;
+    }
+}
+
+void fill_array(int *data, int N) {
+    for (int i = 0; i < N * N; i++)
+        data[i] = i + 1;
+}
+
+void print_matrix(int *data, int N) {
+    int displayLimit = (N > 10) ? 10 : N;
+    for (int i = 0; i < displayLimit; i++) {
+        for (int j = 0; j < displayLimit; j++) {
+            printf("%4d ", data[i * N + j]);
+        }
+        printf("\n");
+    }
+}
+
+int main() {
+    int N, scalar;
+    char command[50];
+
+    // 1. Get Matrix Parameters
+    printf("Enter matrix size N: ");
+    scanf("%d", &N);
+    printf("Enter scalar value: ");
+    scanf("%d", &scalar);
+
+    int size = N * N * sizeof(int);
+    int *h_a = (int*)malloc(size);
+    int *h_b = (int*)malloc(size);
+
+    fill_array(h_a, N);
+
+    // 2. Display Original Matrix First
+    printf("\nOriginal Matrix (Sample %dx%d):\n", (N > 10 ? 10 : N), (N > 10 ? 10 : N));
+    print_matrix(h_a, N);
+
+    // 3. Prompt for Command
+    printf("\nEnter command to perform scaling: ");
+    scanf("%s", command);
+
+    if (strcmp(command, SECRET_COMMAND) == 0) {
+        int *d_a, *d_b;
+        cudaMalloc((void**)&d_a, size);
+        cudaMalloc((void**)&d_b, size);
+
+        cudaMemcpy(d_a, h_a, size, cudaMemcpyHostToDevice);
+
+        dim3 block(BLOCK_SIZE, BLOCK_SIZE);
+        dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE, (N + BLOCK_SIZE - 1) / BLOCK_SIZE);
+
+        // Run Kernel
+        matrix_scale_shared<<<grid, block>>>(d_a, d_b, N, scalar);
+
+        cudaMemcpy(h_b, d_b, size, cudaMemcpyDeviceToHost);
+
+        // 4. Display Result
+        printf("\nCommand Accepted! Scaled Matrix:\n");
+        print_matrix(h_b, N);
+
+        cudaFree(d_a);
+        cudaFree(d_b);
+    } else {
+        printf("\nInvalid command. Scaling aborted.\n");
+    }
+
+    free(h_a);
+    free(h_b);
+    return 0;
+}
