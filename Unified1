@@ -1,0 +1,63 @@
+#include <stdio.h>
+#include <cuda.h>
+
+#define N 3   // Matrix size (NxN)
+
+// CUDA Kernel
+__global__ void matrixAdd(int *A, int *B, int *C, int n) {
+    int row = threadIdx.y;
+    int col = threadIdx.x;
+
+    if (row < n && col < n) {
+        int index = row * n + col;
+        C[index] = A[index] + B[index];
+    }
+}
+
+int main() {
+    int *A, *B, *C;
+
+    // Allocate Unified Memory
+    cudaMallocManaged(&A, N * N * sizeof(int));
+    cudaMallocManaged(&B, N * N * sizeof(int));
+    cudaMallocManaged(&C, N * N * sizeof(int));
+
+    // Initialize matrices
+    printf("Matrix A:\n");
+    for (int i = 0; i < N * N; i++) {
+        A[i] = i + 1;
+        printf("%d ", A[i]);
+        if ((i + 1) % N == 0) printf("\n");
+    }
+
+    printf("\nMatrix B:\n");
+    for (int i = 0; i < N * N; i++) {
+        B[i] = (i + 1) * 2;
+        printf("%d ", B[i]);
+        if ((i + 1) % N == 0) printf("\n");
+    }
+
+    // Define block and grid size
+    dim3 threadsPerBlock(N, N);
+    dim3 blocksPerGrid(1, 1);
+
+    // Launch kernel
+    matrixAdd<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
+
+    // Wait for GPU to finish
+    cudaDeviceSynchronize();
+
+    // Display result
+    printf("\nMatrix C (A + B):\n");
+    for (int i = 0; i < N * N; i++) {
+        printf("%d ", C[i]);
+        if ((i + 1) % N == 0) printf("\n");
+    }
+
+    // Free memory
+    cudaFree(A);
+    cudaFree(B);
+    cudaFree(C);
+
+    return 0;
+}
