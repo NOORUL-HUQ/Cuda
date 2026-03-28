@@ -1,0 +1,53 @@
+#include <stdio.h> 
+ #include <cuda_runtime.h> 
+
+ #define MAX 10 
+
+ __global__ void scale(int *A, int f, int N) { 
+ int i = blockIdx.x * blockDim.x + threadIdx.x; 
+ if (i < N*N) A[i] *= f; 
+ } 
+
+ int main() { 
+ int A[MAX][MAX], N, f; 
+
+ printf("Enter N: "); 
+ scanf("%d", &N); 
+
+ int v = 1; 
+ for (int i=0;i<N;i++) 
+ for (int j=0;j<N;j++) 
+ A[i][j] = v++; 
+
+ printf("Matrix:\n"); 
+ for (int i=0;i<N;i++){ 
+ for (int j=0;j<N;j++) 
+ printf("%d ", A[i][j]); 
+ printf("\n"); 
+ } 
+
+ printf("Enter factor: "); 
+ scanf("%d", &f); 
+
+ int *d_A; 
+ int size = N*N*sizeof(int); 
+
+ cudaMalloc(&d_A, size); 
+ cudaMemcpy(d_A, A, size, cudaMemcpyHostToDevice); 
+
+ int t = 256; 
+ int b = (N*N + t - 1)/t; 
+
+ scale<<<b,t>>>(d_A, f, N); 
+
+ cudaMemcpy(A, d_A, size, cudaMemcpyDeviceToHost); 
+
+ printf("Scaled:\n"); 
+ for (int i=0;i<N;i++){ 
+ for (int j=0;j<N;j++) 
+ printf("%d ", A[i][j]); 
+ printf("\n"); 
+ } 
+
+ cudaFree(d_A); 
+ } 
